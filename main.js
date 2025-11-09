@@ -270,6 +270,16 @@ class FaceRegistrationSystem {
 // Initialize the system
 const faceSystem = new FaceRegistrationSystem();
 
+// *** START FIX: Camera Release ***
+// Add event listener to stop the camera stream when leaving the page.
+// This prevents the "black screen" issue when navigating to a new page
+// that also needs to use the camera.
+window.addEventListener('beforeunload', () => {
+    console.log("Releasing camera before page unload...");
+    faceSystem.stopVideoStream();
+});
+// *** END FIX ***
+
 // Export for use in other files
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = FaceRegistrationSystem;
