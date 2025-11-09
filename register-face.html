@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Data Collection - บันทึกข้อมูลใบหน้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .hero-title {
+            font-family: 'Crimson Text', serif;
+            font-weight: 700;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .camera-container {
+            position: relative;
+            border: 3px solid #00ff88;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        .capture-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 255, 136, 0.1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .capture-overlay.active {
+            opacity: 1;
+            animation: flash 0.3s ease;
+        }
+        
+        @keyframes flash {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            height: 20px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #00ff88, #00ccff);
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 1rem;
+        }
+        
+        .image-thumbnail {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #333;
+            position: relative;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .image-thumbnail.captured {
+            border-color: #00ff88;
+        }
+        
+        .image-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .capture-counter {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 1rem;
+            position: relative;
+        }
+        
+        .step.active {
+            background: #00ff88;
+            color: #0a0a0a;
+        }
+        
+        .step.completed {
+            background: #00aa55;
+            color: white;
+        }
+        
+        .step-line {
+            width: 60px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .step-line.completed {
+            background: #00ff88;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #0a0a0a;
+            font-weight: 600;
+            padding: 16px 32px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 255, 136, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .stats-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .face-guidelines {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 250px;
+            border: 2px dashed rgba(0, 255, 136, 0.5);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        
+        .face-guidelines.active {
+            border-color: #00ff88;
+            border-style: solid;
+            animation: pulse-ring 2s infinite;
+        }
+        
+        @keyframes pulse-ring {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-gray-900 py-4">
+        <div class="container mx-auto px-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-xl font-semibold">Smart Home Security</h1>
+                </div>
+                <button onclick="window.location.href='index.html'" class="text-gray-400 hover:text-white transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12l9-9 9 9"></path>
+                        <path d="M12 3v18"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">1</div>
+            <div class="step-line completed"></div>
+            <div class="step completed">2</div>
+            <div class="step-line completed"></div>
+            <div class="step active">3</div>
+            <div class="step-line"></div>
+            <div class="step">4</div>
+        </div>
+
+        <!-- Title Section -->
+        <div class="text-center mb-8">
+            <h1 class="hero-title text-4xl md:text-5xl mb-4">
+                <span class="gradient-text">บันทึกข้อมูลใบหน้า</span>
+            </h1>
+            <p class="text-xl text-gray-300 mb-2">กำลังบันทึกข้อมูลใบหน้าของคุณ</p>
+            <p class="text-gray-400">ระบบจะถ่ายภาพอัตโนมัติ 20 ภาพใน 5 วินาที</p>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Camera Section -->
+            <div class="lg:col-span-2">
+                <div class="camera-container aspect-video relative mb-4">
+                    <video id="cameraFeed" class="w-full h-full object-cover"></video>
+                    <div class="face-guidelines" id="faceGuidelines"></div>
+                    <div class="capture-overlay" id="captureOverlay"></div>
+                    
+                    <!-- Status Overlay -->
+                    <div class="absolute top-4 left-4 bg-black bg-opacity-50 rounded-lg p-3">
+                        <div class="text-sm text-green-400 font-medium">กำลังบันทึกข้อมูล</div>
+                        <div class="text-xs text-gray-300">ถ่ายภาพอัตโนมัติ</div>
+                    </div>
+                    
+                    <!-- Countdown -->
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center" style="display: none;" id="countdown">
+                        <div class="text-6xl font-bold text-green-400" id="countdownNumber">3</div>
+                        <div class="text-lg text-gray-300">เริ่มบันทึกข้อมูล</div>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm text-gray-400">ความคืบหน้า</span>
+                        <span class="text-sm text-green-400" id="progressText">0/20 ภาพ</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats and Images Section -->
+            <div class="space-y-6">
+                <!-- Stats Cards -->
+                <div class="stats-card">
+                    <h3 class="text-lg font-semibold mb-4 text-green-400">สถิติการบันทึก</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">ภาพที่บันทึกแล้ว</span>
+                            <span class="font-medium" id="capturedCount">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">ภาพที่เหลือ</span>
+                            <span class="font-medium" id="remainingCount">20</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">ความถูกต้อง</span>
+                            <span class="font-medium text-green-400" id="accuracy">100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Preview Grid -->
+                <div class="stats-card">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-400">ภาพที่บันทึก</h3>
+                    <div class="image-grid" id="imageGrid">
+                        <!-- Generate 20 empty slots -->
+                        <script>
+                            document.write(Array.from({length: 20}, (_, i) => 
+                                `<div class="image-thumbnail" id="thumb-${i}">
+                                    <div class="capture-counter">${i + 1}</div>
+                                </div>`
+                            ).join(''));
+                        </script>
+                    </div>
+                </div>
+
+                <!-- Quality Chart -->
+                <div class="stats-card">
+                    <h3 class="text-lg font-semibold mb-4 text-purple-400">คุณภาพภาพ</h3>
+                    <div id="qualityChart" style="height: 200px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex justify-center space-x-4 mt-8">
+            <button id="startCaptureBtn" class="btn-primary">
+                <span id="btnText">เริ่มบันทึกข้อมูล</span>
+                <div id="btnLoader" class="hidden w-6 h-6 border-2 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </button>
+            
+            <button onclick="window.location.href='register.html'" class="btn-primary" style="background: linear-gradient(135deg, #ff6b6b, #ff5252);">
+                ยกเลิก
+            </button>
+        </div>
+    </main>
+
+    <script src="main.js"></script>
+    <script>
+        let capturedImages = [];
+        let isCapturing = false;
+        let qualityChart;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFaceCollection();
+        });
+
+        async function initializeFaceCollection() {
+            const cameraFeed = document.getElementById('cameraFeed');
+            const startBtn = document.getElementById('startCaptureBtn');
+            const faceGuidelines = document.getElementById('faceGuidelines');
+            
+            // Get user info from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const userName = urlParams.get('name') || 'ผู้ใช้';
+            const token = urlParams.get('token');
+            
+            // Verify token
+            if (!token || !faceSystem.verifyJWT(token)) {
+                faceSystem.showNotification('ไม่มีสิทธิ์เข้าถึงหน้านี้', 'error');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+                return;
+            }
+
+            // Start camera
+            try {
+                const result = await faceSystem.requestCameraPermission();
+                if (result.success) {
+                    faceSystem.startVideoStream(cameraFeed);
+                    faceGuidelines.classList.add('active');
+                }
+            } catch (error) {
+                faceSystem.showNotification('ไม่สามารถเข้าถึงกล้องได้', 'error');
+                return;
+            }
+
+            // Initialize quality chart
+            initializeQualityChart();
+
+            startBtn.addEventListener('click', async function() {
+                if (isCapturing) return;
+                
+                isCapturing = true;
+                startBtn.disabled = true;
+                startBtn.querySelector('#btnText').textContent = 'กำลังบันทึก...';
+                startBtn.querySelector('#btnLoader').classList.remove('hidden');
+
+                // Start countdown
+                await startCountdown();
+                
+                // Start capturing
+                await startFaceCapture();
+            });
+        }
+
+        async function startCountdown() {
+            const countdown = document.getElementById('countdown');
+            const countdownNumber = document.getElementById('countdownNumber');
+            
+            countdown.style.display = 'block';
+            
+            for (let i = 3; i > 0; i--) {
+                countdownNumber.textContent = i;
+                await faceSystem.delay(1000);
+            }
+            
+            countdown.style.display = 'none';
+        }
+
+        async function startFaceCapture() {
+            const cameraFeed = document.getElementById('cameraFeed');
+            const captureOverlay = document.getElementById('captureOverlay');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            capturedImages = [];
+            const totalImages = 20;
+            const captureInterval = 250; // 4 images per second
+
+            for (let i = 0; i < totalImages; i++) {
+                // Capture image
+                const imageData = faceSystem.captureFrame(cameraFeed);
+                capturedImages.push(imageData);
+                
+                // Flash effect
+                captureOverlay.classList.add('active');
+                setTimeout(() => captureOverlay.classList.remove('active'), 100);
+                
+                // Update progress
+                const progress = ((i + 1) / totalImages) * 100;
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `${i + 1}/${totalImages} ภาพ`;
+                
+                // Update stats
+                document.getElementById('capturedCount').textContent = i + 1;
+                document.getElementById('remainingCount').textContent = totalImages - (i + 1);
+                
+                // Update thumbnail
+                const thumbnail = document.getElementById(`thumb-${i}`);
+                thumbnail.innerHTML = `<img src="${imageData}" alt="Face ${i + 1}">`;
+                thumbnail.classList.add('captured');
+                
+                // Update quality chart
+                updateQualityChart(i + 1);
+                
+                await faceSystem.delay(captureInterval);
+            }
+            
+            // Complete registration
+            await completeRegistration();
+        }
+
+        async function completeRegistration() {
+            const userName = new URLSearchParams(window.location.search).get('name') || 'ผู้ใช้';
+            
+            faceSystem.showNotification('บันทึกข้อมูลใบหน้าเสร็จสมบูรณ์', 'success');
+            
+            try {
+                const result = await faceSystem.simulateFaceRegistration('user_' + Date.now(), capturedImages);
+                
+                if (result.success) {
+                    // Send LINE notification
+                    await faceSystem.simulateLineNotification(`✅ ลงทะเบียน ${userName} เสร็จสมบูรณ์`);
+                    
+                    // Show completion message
+                    setTimeout(() => {
+                        alert(`ลงทะเบียน ${userName} เสร็จสมบูรณ์! คุณสามารถใช้งานระบบสแกนใบหน้าได้แล้ว`);
+                        window.location.href = 'scan.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                faceSystem.showNotification('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+            }
+        }
+
+        function initializeQualityChart() {
+            const chartDom = document.getElementById('qualityChart');
+            qualityChart = echarts.init(chartDom);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                grid: {
+                    left: '10%',
+                    right: '10%',
+                    top: '10%',
+                    bottom: '20%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: Array.from({length: 20}, (_, i) => i + 1),
+                    axisLine: { lineStyle: { color: '#666' } },
+                    axisLabel: { color: '#999', fontSize: 10 }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 0,
+                    max: 100,
+                    axisLine: { lineStyle: { color: '#666' } },
+                    axisLabel: { color: '#999', fontSize: 10 },
+                    splitLine: { lineStyle: { color: '#333' } }
+                },
+                series: [{
+                    data: [],
+                    type: 'line',
+                    smooth: true,
+                    lineStyle: { color: '#00ff88', width: 2 },
+                    itemStyle: { color: '#00ff88' },
+                    areaStyle: {
+                        color: {
+                            type: 'linear',
+                            x: 0, y: 0, x2: 0, y2: 1,
+                            colorStops: [
+                                { offset: 0, color: 'rgba(0, 255, 136, 0.3)' },
+                                { offset: 1, color: 'rgba(0, 255, 136, 0.1)' }
+                            ]
+                        }
+                    }
+                }]
+            };
+            
+            qualityChart.setOption(option);
+        }
+
+        function updateQualityChart(capturedCount) {
+            const qualityData = Array.from({length: capturedCount}, () => 
+                85 + Math.random() * 15 // Simulate quality scores between 85-100%
+            );
+            
+            qualityChart.setOption({
+                series: [{
+                    data: qualityData
+                }]
+            });
+        }
+    </script>
+</body>
+</html>

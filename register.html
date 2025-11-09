@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spoof Detection - ตรวจจับการปลอมแปลงใบหน้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .hero-title {
+            font-family: 'Crimson Text', serif;
+            font-weight: 700;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .camera-container {
+            position: relative;
+            border: 3px solid #333;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        .face-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 250px;
+            border: 2px solid #00ff88;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .face-overlay.detected {
+            opacity: 1;
+            animation: pulse-ring 2s infinite;
+        }
+        
+        .scanning-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.3;
+            animation: scan-grid 3s linear infinite;
+        }
+        
+        @keyframes scan-grid {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(20px, 20px); }
+        }
+        
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: blink 1s infinite;
+        }
+        
+        .status-indicator.success {
+            background: #00ff88;
+            animation: none;
+        }
+        
+        .status-indicator.warning {
+            background: #ffaa00;
+            animation: blink 0.5s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        
+        .progress-ring-circle {
+            stroke-dasharray: 283;
+            stroke-dashoffset: 283;
+            transition: stroke-dashoffset 0.5s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #0a0a0a;
+            font-weight: 600;
+            padding: 16px 32px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 255, 136, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            font-weight: 600;
+            padding: 14px 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: #00ff88;
+            color: #0a0a0a;
+        }
+        
+        .form-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            color: white;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+        }
+        
+        .form-input::placeholder {
+            color: #666;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 1rem;
+            position: relative;
+        }
+        
+        .step.active {
+            background: #00ff88;
+            color: #0a0a0a;
+        }
+        
+        .step.completed {
+            background: #00aa55;
+            color: white;
+        }
+        
+        .step-line {
+            width: 60px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .step-line.completed {
+            background: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-gray-900 py-4">
+        <div class="container mx-auto px-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-xl font-semibold">Smart Home Security</h1>
+                </div>
+                <button onclick="window.location.href='index.html'" class="text-gray-400 hover:text-white transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12l9-9 9 9"></path>
+                        <path d="M12 3v18"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">1</div>
+            <div class="step-line completed"></div>
+            <div class="step active">2</div>
+            <div class="step-line"></div>
+            <div class="step">3</div>
+            <div class="step-line"></div>
+            <div class="step">4</div>
+        </div>
+
+        <!-- Title Section -->
+        <div class="text-center mb-8">
+            <h1 class="hero-title text-4xl md:text-5xl mb-4">
+                <span class="gradient-text">ตรวจจับใบหน้า</span>
+            </h1>
+            <p class="text-xl text-gray-300 mb-2">ขั้นตอนการตรวจจับการปลอมแปลงใบหน้า</p>
+            <p class="text-gray-400">โปรดมองหน้าจอและรักษาท่าทางตามธรรมชาติ</p>
+        </div>
+
+        <!-- Camera Section -->
+        <div class="max-w-2xl mx-auto mb-8">
+            <div class="camera-container aspect-video relative">
+                <video id="cameraFeed" class="w-full h-full object-cover"></video>
+                <div class="scanning-grid"></div>
+                <div class="face-overlay" id="faceOverlay"></div>
+                <div class="status-indicator" id="statusIndicator"></div>
+                
+                <!-- Progress Ring -->
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" style="display: none;" id="progressRing">
+                    <svg width="120" height="120" class="progress-ring">
+                        <circle cx="60" cy="60" r="45" stroke="rgba(255,255,255,0.1)" stroke-width="4" fill="none"></circle>
+                        <circle cx="60" cy="60" r="45" stroke="#00ff88" stroke-width="4" fill="none" 
+                                class="progress-ring-circle" id="progressCircle"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-2xl font-bold" id="progressText">0%</span>
+                    </div>
+                </div>
+                
+                <!-- Status Messages -->
+                <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center">
+                    <div id="statusMessage" class="text-white font-medium mb-2">กำลังตรวจจับใบหน้า...</div>
+                    <div id="subStatusMessage" class="text-gray-400 text-sm">โปรดมองหน้าจอ</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Section -->
+        <div class="max-w-md mx-auto text-center">
+            <button id="startDetectionBtn" class="btn-primary w-full mb-4">
+                <span id="btnText">เริ่มตรวจจับใบหน้า</span>
+                <div id="btnLoader" class="hidden w-6 h-6 border-2 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </button>
+            
+            <button onclick="window.location.href='index.html'" class="btn-secondary w-full">
+                ยกเลิกและกลับหน้าหลัก
+            </button>
+        </div>
+
+        <!-- Name Input Form (Hidden initially) -->
+        <div id="nameFormSection" class="max-w-md mx-auto mt-8" style="display: none;">
+            <div class="bg-gray-800 bg-opacity-50 rounded-2xl p-6 backdrop-filter backdrop-blur-lg">
+                <h3 class="text-xl font-semibold mb-4 text-center">กรอกชื่อของคุณ</h3>
+                <form id="nameForm">
+                    <input type="text" id="userName" class="form-input mb-4" placeholder="ชื่อ-นามสกุล" required>
+                    <button type="submit" class="btn-primary w-full">
+                        ขออนุมัติการลงทะเบียน
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- LINE Notification Simulation -->
+        <div id="lineNotification" class="max-w-md mx-auto mt-6" style="display: none;">
+            <div class="bg-green-600 bg-opacity-20 border border-green-500 rounded-lg p-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13"></path>
+                            <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="font-medium">ส่งคำขออนุมัติแล้ว</div>
+                        <div class="text-sm text-gray-300">รอการยืนยันจากเจ้าของบ้านผ่าน LINE</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="main.js"></script>
+    <script>
+        let detectionInterval;
+        let captureFrames = [];
+        let isDetecting = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSpoofDetection();
+        });
+
+        async function initializeSpoofDetection() {
+            const cameraFeed = document.getElementById('cameraFeed');
+            const startBtn = document.getElementById('startDetectionBtn');
+            const faceOverlay = document.getElementById('faceOverlay');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusMessage = document.getElementById('statusMessage');
+            const subStatusMessage = document.getElementById('subStatusMessage');
+            const progressRing = document.getElementById('progressRing');
+            const progressCircle = document.getElementById('progressCircle');
+            const progressText = document.getElementById('progressText');
+            const nameFormSection = document.getElementById('nameFormSection');
+
+            // Start camera
+            try {
+                const result = await faceSystem.requestCameraPermission();
+                if (result.success) {
+                    faceSystem.startVideoStream(cameraFeed);
+                }
+            } catch (error) {
+                faceSystem.showNotification('ไม่สามารถเข้าถึงกล้องได้', 'error');
+                return;
+            }
+
+            startBtn.addEventListener('click', async function() {
+                if (isDetecting) return;
+                
+                isDetecting = true;
+                startBtn.disabled = true;
+                startBtn.querySelector('#btnText').textContent = 'กำลังตรวจจับ...';
+                startBtn.querySelector('#btnLoader').classList.remove('hidden');
+
+                // Show face overlay
+                faceOverlay.classList.add('detected');
+                statusIndicator.className = 'status-indicator warning';
+                statusMessage.textContent = 'กำลังตรวจจับใบหน้า...';
+                subStatusMessage.textContent = 'กรุณารักษาท่าทางตามธรรมชาติ';
+
+                // Start frame capture
+                captureFrames = [];
+                let captureCount = 0;
+                const totalCaptures = 5;
+
+                detectionInterval = setInterval(() => {
+                    if (captureCount < totalCaptures) {
+                        const frame = faceSystem.captureFrame(cameraFeed);
+                        captureFrames.push(frame);
+                        captureCount++;
+                        
+                        // Update progress
+                        const progress = (captureCount / totalCaptures) * 100;
+                        progressRing.style.display = 'block';
+                        progressText.textContent = `${Math.round(progress)}%`;
+                        
+                        const circumference = 2 * Math.PI * 45;
+                        const offset = circumference - (progress / 100) * circumference;
+                        progressCircle.style.strokeDashoffset = offset;
+                        
+                        statusMessage.textContent = `กำลังถ่ายภาพ ${captureCount}/${totalCaptures}`;
+                    } else {
+                        clearInterval(detectionInterval);
+                        completeDetection();
+                    }
+                }, 600);
+            });
+
+            async function completeDetection() {
+                statusMessage.textContent = 'กำลังวิเคราะห์ข้อมูล...';
+                subStatusMessage.textContent = 'ตรวจสอบการปลอมแปลงใบหน้า';
+                
+                try {
+                    const result = await faceSystem.simulateSpoofDetection(captureFrames);
+                    
+                    if (result.is_real && result.confidence > 0.95) {
+                        // Success
+                        statusIndicator.className = 'status-indicator success';
+                        statusMessage.textContent = 'ตรวจจับใบหน้าสำเร็จ';
+                        subStatusMessage.textContent = `ความมั่นใจ: ${(result.confidence * 100).toFixed(1)}%`;
+                        
+                        faceSystem.showNotification('ตรวจจับใบหน้าสำเร็จ', 'success');
+                        
+                        // Show name form
+                        setTimeout(() => {
+                            nameFormSection.style.display = 'block';
+                            faceSystem.animateElement(nameFormSection, { opacity: [0, 1], translateY: [30, 0] });
+                        }, 1000);
+                        
+                    } else {
+                        // Failed
+                        statusIndicator.className = 'status-indicator';
+                        statusMessage.textContent = 'ตรวจพบการปลอมแปลง';
+                        subStatusMessage.textContent = 'กรุณาใช้ใบหน้าจริงเท่านั้น';
+                        
+                        faceSystem.showNotification('ตรวจพบการปลอมแปลงใบหน้า กรุณาลองใหม่', 'error');
+                        
+                        // Reset for retry
+                        setTimeout(() => {
+                            resetDetection();
+                        }, 3000);
+                    }
+                } catch (error) {
+                    faceSystem.showNotification('เกิดข้อผิดพลาดในการตรวจจับ', 'error');
+                    resetDetection();
+                }
+            }
+
+            function resetDetection() {
+                isDetecting = false;
+                startBtn.disabled = false;
+                startBtn.querySelector('#btnText').textContent = 'เริ่มตรวจจับใบหน้าใหม่';
+                startBtn.querySelector('#btnLoader').classList.add('hidden');
+                
+                faceOverlay.classList.remove('detected');
+                statusIndicator.className = 'status-indicator';
+                statusMessage.textContent = 'กำลังตรวจจับใบหน้า...';
+                subStatusMessage.textContent = 'โปรมองหน้าจอ';
+                progressRing.style.display = 'none';
+                
+                captureFrames = [];
+            }
+
+            // Handle name form submission
+            document.getElementById('nameForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const userName = document.getElementById('userName').value.trim();
+                if (!userName) return;
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'กำลังส่งคำขอ...';
+                
+                try {
+                    // Simulate sending registration request
+                    const result = await faceSystem.simulateLineNotification(`คำขอลงทะเบียนจาก ${userName}`);
+                    
+                    if (result.success) {
+                        faceSystem.showNotification('ส่งคำขออนุมัติแล้ว รอการยืนยันผ่าน LINE', 'success');
+                        
+                        // Show LINE notification simulation
+                        document.getElementById('lineNotification').style.display = 'block';
+                        
+                        // Simulate approval after 3 seconds
+                        setTimeout(() => {
+                            const userId = 'user_' + Date.now();
+                            const token = faceSystem.generateJWT(userId);
+                            window.location.href = `register-face.html?token=${token}&name=${encodeURIComponent(userName)}`;
+                        }, 3000);
+                    }
+                } catch (error) {
+                    faceSystem.showNotification('เกิดข้อผิดพลาดในการส่งคำขอ', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'ขออนุมัติการลงทะเบียน';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

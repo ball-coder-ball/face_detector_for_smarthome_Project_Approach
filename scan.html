@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Scanning - สแกนใบหน้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .hero-title {
+            font-family: 'Crimson Text', serif;
+            font-weight: 700;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .camera-container {
+            position: relative;
+            border: 3px solid #00ff88;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        .scanning-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            animation: scan-vertical 2s linear infinite;
+        }
+        
+        @keyframes scan-vertical {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        
+        .face-detection-box {
+            position: absolute;
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            background: rgba(0, 255, 136, 0.1);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .face-detection-box.detected {
+            opacity: 1;
+            animation: pulse-detected 1s ease;
+        }
+        
+        @keyframes pulse-detected {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .access-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+        
+        .access-status.show {
+            opacity: 1;
+        }
+        
+        .access-granted {
+            color: #00ff88;
+        }
+        
+        .access-denied {
+            color: #ff4444;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .status-card.success {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .status-card.error {
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .status-card.warning {
+            border-color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+        
+        .scan-button {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #0a0a0a;
+            font-weight: 600;
+            padding: 20px 40px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            font-size: 18px;
+        }
+        
+        .scan-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0, 255, 136, 0.4);
+        }
+        
+        .scan-button:active {
+            transform: translateY(-1px);
+        }
+        
+        .scan-button.scanning {
+            background: linear-gradient(135deg, #ffaa00, #ff8800);
+            animation: pulse-scanning 1.5s infinite;
+        }
+        
+        @keyframes pulse-scanning {
+            0%, 100% { box-shadow: 0 15px 35px rgba(255, 170, 0, 0.4); }
+            50% { box-shadow: 0 15px 35px rgba(255, 170, 0, 0.8); }
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 1rem;
+            position: relative;
+        }
+        
+        .step.active {
+            background: #00ff88;
+            color: #0a0a0a;
+        }
+        
+        .step.completed {
+            background: #00aa55;
+            color: white;
+        }
+        
+        .step-line {
+            width: 60px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .step-line.completed {
+            background: #00ff88;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .access-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 4px solid #00ff88;
+        }
+        
+        .log-entry.error {
+            border-left-color: #ff4444;
+        }
+        
+        .log-entry.warning {
+            border-left-color: #ffaa00;
+        }
+        
+        .floating-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff88;
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float-particle 4s linear infinite;
+        }
+        
+        @keyframes float-particle {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-100px) translateX(50px);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-gray-900 py-4">
+        <div class="container mx-auto px-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-xl font-semibold">Smart Home Security</h1>
+                </div>
+                <button onclick="window.location.href='index.html'" class="text-gray-400 hover:text-white transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12l9-9 9 9"></path>
+                        <path d="M12 3v18"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">1</div>
+            <div class="step-line completed"></div>
+            <div class="step completed">2</div>
+            <div class="step-line completed"></div>
+            <div class="step completed">3</div>
+            <div class="step-line completed"></div>
+            <div class="step active">4</div>
+        </div>
+
+        <!-- Title Section -->
+        <div class="text-center mb-8">
+            <h1 class="hero-title text-4xl md:text-5xl mb-4">
+                <span class="gradient-text">สแกนใบหน้า</span>
+            </h1>
+            <p class="text-xl text-gray-300 mb-2">ระบบสแกนใบหน้าอัจฉริยะ</p>
+            <p class="text-gray-400">มองหน้าจอเพื่อทำการตรวจจำ</p>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Camera Section -->
+            <div class="lg:col-span-2">
+                <div class="camera-container aspect-video relative mb-6">
+                    <video id="cameraFeed" class="w-full h-full object-cover"></video>
+                    <div class="scanning-overlay">
+                        <div class="scan-line"></div>
+                        <div class="face-detection-box" id="faceDetectionBox"></div>
+                    </div>
+                    <div class="floating-particles" id="floatingParticles"></div>
+                    
+                    <!-- Access Status Overlay -->
+                    <div class="access-status" id="accessStatus">
+                        <div class="text-6xl mb-4" id="statusIcon">✓</div>
+                        <div class="text-2xl font-bold mb-2" id="statusTitle">การเข้าถึงได้รับอนุญาต</div>
+                        <div class="text-lg" id="statusMessage">ยินดีต้อนรับกลับบ้าน</div>
+                        <div class="text-sm mt-2 opacity-75" id="statusDetails">ความมั่นใจ: 95.2%</div>
+                    </div>
+                    
+                    <!-- Scanning Status -->
+                    <div class="absolute top-4 left-4 bg-black bg-opacity-50 rounded-lg p-3">
+                        <div class="text-sm text-green-400 font-medium" id="scanStatus">พร้อมสแกน</div>
+                        <div class="text-xs text-gray-300" id="scanDetails">กรุณามองหน้าจอ</div>
+                    </div>
+                    
+                    <!-- Confidence Meter -->
+                    <div class="absolute bottom-4 left-4 right-4">
+                        <div class="bg-black bg-opacity-50 rounded-lg p-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-gray-400">ความมั่นใจ</span>
+                                <span class="text-sm text-green-400" id="confidenceValue">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-2 rounded-full transition-all duration-300" 
+                                     id="confidenceBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Control Button -->
+                <div class="text-center">
+                    <button id="scanButton" class="scan-button">
+                        <span id="scanBtnText">เริ่มสแกนใบหน้า</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status and Logs Section -->
+            <div class="space-y-6">
+                <!-- Current Status -->
+                <div class="status-card" id="currentStatusCard">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-400">สถานะปัจจุบัน</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">สถานะระบบ</span>
+                            <span class="font-medium text-green-400" id="systemStatus">พร้อมทำงาน</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">การเชื่อมต่อ</span>
+                            <span class="font-medium text-green-400" id="connectionStatus">ออนไลน์</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">ผู้ใช้งาน</span>
+                            <span class="font-medium" id="activeUsers">2 คน</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Access Log -->
+                <div class="status-card">
+                    <h3 class="text-lg font-semibold mb-4 text-purple-400">ประวัติการเข้าใช้</h3>
+                    <div class="access-log" id="accessLog">
+                        <div class="log-entry">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-medium text-sm">สมชาย ใจดี</div>
+                                    <div class="text-xs text-gray-400">เข้าบ้านสำเร็จ</div>
+                                </div>
+                                <div class="text-xs text-gray-500">14:25:32</div>
+                            </div>
+                        </div>
+                        <div class="log-entry">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-medium text-sm">สมหญิง รักษ์บ้าน</div>
+                                    <div class="text-xs text-gray-400">เข้าบ้านสำเร็จ</div>
+                                </div>
+                                <div class="text-xs text-gray-500">13:15:45</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Stats -->
+                <div class="status-card">
+                    <h3 class="text-lg font-semibold mb-4 text-orange-400">สถิติความปลอดภัย</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">การเข้าใช้วันนี้</span>
+                            <span class="font-medium text-green-400" id="todayAccess">12 ครั้ง</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">ความแม่นยำ</span>
+                            <span class="font-medium text-green-400" id="accuracy">98.5%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">การปลอมแปลง</span>
+                            <span class="font-medium text-red-400" id="spoofAttempts">0 ครั้ง</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="main.js"></script>
+    <script>
+        let isScanning = false;
+        let scanInterval;
+        let accessLog = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFaceScanning();
+        });
+
+        async function initializeFaceScanning() {
+            const cameraFeed = document.getElementById('cameraFeed');
+            const scanButton = document.getElementById('scanButton');
+            const faceDetectionBox = document.getElementById('faceDetectionBox');
+            const accessStatus = document.getElementById('accessStatus');
+            const floatingParticles = document.getElementById('floatingParticles');
+            
+            // Start camera
+            try {
+                const result = await faceSystem.requestCameraPermission();
+                if (result.success) {
+                    faceSystem.startVideoStream(cameraFeed);
+                }
+            } catch (error) {
+                faceSystem.showNotification('ไม่สามารถเข้าถึงกล้องได้', 'error');
+                return;
+            }
+
+            // Create floating particles
+            createFloatingParticles();
+
+            scanButton.addEventListener('click', function() {
+                if (isScanning) {
+                    stopScanning();
+                } else {
+                    startScanning();
+                }
+            });
+
+            async function startScanning() {
+                isScanning = true;
+                scanButton.classList.add('scanning');
+                scanButton.querySelector('#scanBtnText').textContent = 'กำลังสแกน...';
+                
+                // Update status
+                updateScanStatus('กำลังสแกน', 'กำลังตรวจจับใบหน้า...');
+                
+                // Show face detection box
+                faceDetectionBox.classList.add('detected');
+                
+                // Start continuous scanning
+                scanInterval = setInterval(async () => {
+                    await performFaceScan();
+                }, 2000); // Scan every 2 seconds
+            }
+
+            function stopScanning() {
+                isScanning = false;
+                scanButton.classList.remove('scanning');
+                scanButton.querySelector('#scanBtnText').textContent = 'เริ่มสแกนใบหน้า';
+                
+                if (scanInterval) {
+                    clearInterval(scanInterval);
+                }
+                
+                // Hide face detection box
+                faceDetectionBox.classList.remove('detected');
+                
+                // Reset status
+                updateScanStatus('พร้อมสแกน', 'กรุณามองหน้าจอ');
+                resetConfidence();
+                hideAccessStatus();
+            }
+
+            async function performFaceScan() {
+                const frame = faceSystem.captureFrame(cameraFeed);
+                
+                try {
+                    const result = await faceSystem.simulateFaceScan(frame);
+                    
+                    if (result.is_match) {
+                        // Access granted
+                        showAccessGranted(result.user, result.confidence);
+                        addAccessLog(result.user.name, 'success', result.confidence);
+                        
+                        // Send LINE notification
+                        await faceSystem.simulateLineNotification(
+                            `🔍 ${result.user.name} เข้าบ้านสำเร็จ (ความมั่นใจ: ${(result.confidence * 100).toFixed(1)}%)`
+                        );
+                        
+                    } else if (result.reason === 'spoof_detected') {
+                        // Spoofing attempt
+                        showAccessDenied('ตรวจพบการปลอมแปลง', 'กรุณาใช้ใบหน้าจริงเท่านั้น');
+                        addAccessLog('Unknown', 'spoof', 0);
+                        
+                        // Send warning notification
+                        await faceSystem.simulateLineNotification('🚨 ตรวจพบการปลอมแปลงใบหน้า!');
+                        
+                    } else {
+                        // Unknown face
+                        showAccessDenied('ไม่พบข้อมูลในระบบ', 'กรุณาลงทะเบียนก่อน');
+                        addAccessLog('Unknown', 'unknown', 0);
+                    }
+                } catch (error) {
+                    faceSystem.showNotification('เกิดข้อผิดพลาดในการสแกน', 'error');
+                }
+            }
+
+            function showAccessGranted(user, confidence) {
+                const statusIcon = document.getElementById('statusIcon');
+                const statusTitle = document.getElementById('statusTitle');
+                const statusMessage = document.getElementById('statusMessage');
+                const statusDetails = document.getElementById('statusDetails');
+                
+                statusIcon.textContent = '✓';
+                statusIcon.className = 'text-6xl mb-4 access-granted';
+                statusTitle.textContent = 'การเข้าถึงได้รับอนุญาต';
+                statusMessage.textContent = `ยินดีต้อนรับ ${user.name}`;
+                statusDetails.textContent = `ความมั่นใจ: ${(confidence * 100).toFixed(1)}%`;
+                
+                accessStatus.className = 'access-status show';
+                
+                // Update confidence bar
+                updateConfidence(confidence * 100);
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    hideAccessStatus();
+                }, 3000);
+            }
+
+            function showAccessDenied(title, message) {
+                const statusIcon = document.getElementById('statusIcon');
+                const statusTitle = document.getElementById('statusTitle');
+                const statusMessage = document.getElementById('statusMessage');
+                const statusDetails = document.getElementById('statusDetails');
+                
+                statusIcon.textContent = '✗';
+                statusIcon.className = 'text-6xl mb-4 access-denied';
+                statusTitle.textContent = title;
+                statusMessage.textContent = message;
+                statusDetails.textContent = '';
+                
+                accessStatus.className = 'access-status show';
+                
+                // Reset confidence
+                resetConfidence();
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    hideAccessStatus();
+                }, 3000);
+            }
+
+            function hideAccessStatus() {
+                accessStatus.className = 'access-status';
+            }
+
+            function updateConfidence(percentage) {
+                const confidenceBar = document.getElementById('confidenceBar');
+                const confidenceValue = document.getElementById('confidenceValue');
+                
+                confidenceBar.style.width = `${percentage}%`;
+                confidenceValue.textContent = `${Math.round(percentage)}%`;
+            }
+
+            function resetConfidence() {
+                updateConfidence(0);
+            }
+
+            function updateScanStatus(status, details) {
+                document.getElementById('scanStatus').textContent = status;
+                document.getElementById('scanDetails').textContent = details;
+            }
+
+            function addAccessLog(userName, type, confidence) {
+                const accessLog = document.getElementById('accessLog');
+                const logEntry = document.createElement('div');
+                
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('th-TH');
+                
+                let statusText, statusClass;
+                switch (type) {
+                    case 'success':
+                        statusText = 'เข้าบ้านสำเร็จ';
+                        statusClass = 'log-entry';
+                        break;
+                    case 'spoof':
+                        statusText = 'ตรวจพบการปลอมแปลง';
+                        statusClass = 'log-entry error';
+                        break;
+                    default:
+                        statusText = 'ไม่พบข้อมูลในระบบ';
+                        statusClass = 'log-entry warning';
+                }
+                
+                logEntry.className = statusClass;
+                logEntry.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-medium text-sm">${userName}</div>
+                            <div class="text-xs text-gray-400">${statusText}</div>
+                        </div>
+                        <div class="text-xs text-gray-500">${timeString}</div>
+                    </div>
+                `;
+                
+                accessLog.insertBefore(logEntry, accessLog.firstChild);
+                
+                // Keep only last 10 entries
+                while (accessLog.children.length > 10) {
+                    accessLog.removeChild(accessLog.lastChild);
+                }
+            }
+
+            function createFloatingParticles() {
+                // Create floating particles for visual effect
+                setInterval(() => {
+                    if (isScanning) {
+                        const particle = document.createElement('div');
+                        particle.className = 'particle';
+                        particle.style.left = Math.random() * 100 + '%';
+                        particle.style.animationDelay = Math.random() * 2 + 's';
+                        floatingParticles.appendChild(particle);
+                        
+                        // Remove particle after animation
+                        setTimeout(() => {
+                            if (particle.parentNode) {
+                                particle.parentNode.removeChild(particle);
+                            }
+                        }, 4000);
+                    }
+                }, 200);
+            }
+        }
+    </script>
+</body>
+</html>
