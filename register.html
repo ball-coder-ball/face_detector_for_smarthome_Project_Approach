@@ -344,6 +344,7 @@
         let detectionInterval;
         let captureFrames = [];
         let isDetecting = false;
+        let bestFrame = null; // <-- ADDED: To store the best frame for request
 
         document.addEventListener('DOMContentLoaded', function() {
             initializeSpoofDetection();
@@ -388,6 +389,7 @@
 
                 // Start frame capture
                 captureFrames = [];
+                bestFrame = null; // <-- ADDED: Reset best frame
                 let captureCount = 0;
                 const totalCaptures = 5;
 
@@ -395,6 +397,9 @@
                     if (captureCount < totalCaptures) {
                         const frame = faceSystem.captureFrame(cameraFeed);
                         captureFrames.push(frame);
+                        if (captureCount === 0) { // <-- ADDED: Store the first frame
+                            bestFrame = frame;
+                        }
                         captureCount++;
                         
                         // Update progress
@@ -419,9 +424,10 @@
                 subStatusMessage.textContent = 'ตรวจสอบการปลอมแปลงใบหน้า';
                 
                 try {
+                    // *** MODIFIED: Calling real API ***
                     const result = await faceSystem.simulateSpoofDetection(captureFrames);
                     
-                    if (result.is_real && result.confidence > 0.95) {
+                    if (result.is_real) { // Simplified check for real API
                         // Success
                         statusIndicator.className = 'status-indicator success';
                         statusMessage.textContent = 'ตรวจจับใบหน้าสำเร็จ';
@@ -481,24 +487,29 @@
                 submitBtn.textContent = 'กำลังส่งคำขอ...';
                 
                 try {
-                    // Simulate sending registration request
-                    const result = await faceSystem.simulateLineNotification(`คำขอลงทะเบียนจาก ${userName}`);
+                    // --- MODIFIED: Send userName and bestFrame to backend ---
+                    const result = await faceSystem.simulateLineNotification(userName, bestFrame); 
                     
                     if (result.success) {
                         faceSystem.showNotification('ส่งคำขออนุมัติแล้ว รอการยืนยันผ่าน LINE', 'success');
-                        
-                        // Show LINE notification simulation
                         document.getElementById('lineNotification').style.display = 'block';
                         
-                        // Simulate approval after 3 seconds
+                        // *** IMPORTANT: Simulating LINE Approval for Project ***
+                        // In a real app, we'd wait for a webhook.
+                        // Here, we'll "pretend" LINE approved it and move to page 3.
+                        console.log("SIMULATING LINE APPROVAL...");
                         setTimeout(() => {
-                            const userId = 'user_' + Date.now();
+                            const userId = result.user_id; // <-- Get user_id from backend
                             const token = faceSystem.generateJWT(userId);
-                            window.location.href = `register-face.html?token=${token}&name=${encodeURIComponent(userName)}`;
-                        }, 3000);
+                            // Pass name and user_id to the next page
+                            window.location.href = `register-face.html?token=${token}&name=${encodeURIComponent(userName)}&user_id=${userId}`;
+                        }, 3000); 
+                        // --- END MODIFICATION ---
+                    } else {
+                        throw new Error(result.message || 'Failed to send request');
                     }
                 } catch (error) {
-                    faceSystem.showNotification('เกิดข้อผิดพลาดในการส่งคำขอ', 'error');
+                    faceSystem.showNotification('เกิดข้อผิดพลาดในการส่งคำขอ: ' + error.message, 'error');
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'ขออนุมัติการลงทะเบียน';
                 }
