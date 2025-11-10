@@ -1,47 +1,13 @@
 // Smart Home Face Registration System - Main JavaScript
-// Core functionality for camera, face detection, and API simulation
+// (MODIFIED VERSION - Connects to REAL FastAPI Backend)
 
 class FaceRegistrationSystem {
     constructor() {
         this.videoStream = null;
-        this.isDetecting = false;
-        this.registeredFaces = [];
-        this.accessLogs = [];
-        this.mockUsers = [];
-        this.initializeMockData();
+        // เราจะไม่เก็บ mockUsers ที่นี่อีกต่อไป Backend จะเป็นคนจัดการ
     }
 
-    initializeMockData() {
-        // Mock registered users for demonstration
-        this.mockUsers = [
-            {
-                id: 'user001',
-                name: 'สมชาย ใจดี',
-                faceEmbeddings: this.generateMockEmbeddings(),
-                status: 'approved'
-            },
-            {
-                id: 'user002',
-                name: 'สมหญิง รักษ์บ้าน',
-                faceEmbeddings: this.generateMockEmbeddings(),
-                status: 'approved'
-            }
-        ];
-    }
-
-    generateMockEmbeddings() {
-        // Generate mock face embeddings for demonstration
-        const embeddings = [];
-        for (let i = 0; i < 20; i++) {
-            const embedding = [];
-            for (let j = 0; j < 512; j++) {
-                embedding.push(Math.random() * 2 - 1);
-            }
-            embeddings.push(embedding);
-        }
-        return embeddings;
-    }
-
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     async requestCameraPermission() {
         try {
             this.videoStream = await navigator.mediaDevices.getUserMedia({
@@ -58,6 +24,7 @@ class FaceRegistrationSystem {
         }
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     startVideoStream(videoElement) {
         if (this.videoStream) {
             videoElement.srcObject = this.videoStream;
@@ -65,6 +32,7 @@ class FaceRegistrationSystem {
         }
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     stopVideoStream() {
         if (this.videoStream) {
             this.videoStream.getTracks().forEach(track => track.stop());
@@ -72,6 +40,7 @@ class FaceRegistrationSystem {
         }
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     captureFrame(videoElement) {
         const canvas = document.createElement('canvas');
         canvas.width = videoElement.videoWidth;
@@ -81,97 +50,76 @@ class FaceRegistrationSystem {
         return canvas.toDataURL('image/jpeg', 0.8);
     }
 
+    // ---------------------------------------------------
+    // START: ส่วนที่เปลี่ยนแปลง (เปลี่ยนจาก Simulation เป็น API จริง)
+    // ---------------------------------------------------
+
+    // หน้า 2: ตรวจจับ Spoof
     async simulateSpoofDetection(frames) {
-        // Simulate spoof detection with realistic timing
-        await this.delay(1000 + Math.random() * 500);
-        
-        // Simulate detection results
-        const isReal = Math.random() > 0.3; // 70% success rate for demo
-        const confidence = isReal ? 0.95 + Math.random() * 0.05 : 0.1 + Math.random() * 0.3;
-        
-        return {
-            is_real: isReal,
-            confidence: confidence,
-            message: isReal ? 'Real face detected' : 'Spoof detected'
-        };
+        // เราจะส่ง 'frames' (array ของรูปภาพ base64) ไปให้ Backend
+        console.log('Sending 5 frames to backend for spoof check...');
+        const response = await fetch('http://127.0.0.1:8000/api/v1/spoof-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ frames: frames })
+        });
+        return await response.json(); // คืนค่า { is_real: true/false, confidence: 0.xx }
     }
 
-    async simulateFaceRegistration(userId, faceImages) {
-        // Simulate face registration process
-        await this.delay(2000 + Math.random() * 1000);
-        
-        const newUser = {
-            id: userId,
-            name: `User ${userId}`,
-            faceEmbeddings: this.generateMockEmbeddings(),
-            status: 'approved',
-            registeredAt: new Date().toISOString()
-        };
-        
-        this.mockUsers.push(newUser);
-        
-        return {
-            success: true,
-            faces_registered: faceImages.length,
-            user_id: userId
-        };
+    // หน้า 2: กดปุ่ม "ขออนุมัติ"
+    async simulateLineNotification(userName, frame) {
+        // ส่งชื่อและรูปภาพ (เฟรมที่ดีที่สุด) ไปให้ Backend เพื่อส่ง LINE
+        console.log(`Sending registration request for ${userName}`);
+        const response = await fetch('http://127.0.0.1:8000/api/v1/request-permission', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: userName, image_data: frame })
+        });
+        return await response.json(); // คืนค่า { success: true, user_id: '...' }
     }
 
+
+    // หน้า 3: บันทึกใบหน้า 20 ภาพ
+    async simulateFaceRegistration(userId, userName, faceImages) {
+        // ส่ง userId (ที่ได้จาก LINE) และ "ชื่อ" และ "รูปภาพ 20 รูป" ไปให้ Backend
+        console.log(`Sending 20 images for ${userName} (ID: ${userId})`);
+        const response = await fetch('http://127.0.0.1:8000/api/v1/register-faces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                user_id: userId, 
+                name: userName, // ส่งชื่อไปด้วย
+                images: faceImages 
+            })
+        });
+        return await response.json(); // คืนค่า { success: true, faces_registered: 20 }
+    }
+
+    // หน้า 4: สแกนใบหน้า
     async simulateFaceScan(imageData) {
-        // Simulate spoof detection first
-        const spoofResult = await this.simulateSpoofDetection([imageData]);
-        if (!spoofResult.is_real) {
-            return {
-                is_match: false,
-                reason: 'spoof_detected',
-                message: 'Spoofing attempt detected'
-            };
-        }
-
-        // Simulate face matching
-        await this.delay(500 + Math.random() * 300);
+        // ส่งภาพที่สแกนได้ไปให้ Backend
+        console.log('Sending 1 frame to backend for recognition...');
+        const response = await fetch('http://127.0.0.1:8000/api/v1/scan-face', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_data: imageData })
+        });
+        const result = await response.json();
         
-        // Random match with existing users
-        if (Math.random() > 0.4 && this.mockUsers.length > 0) {
-            const matchedUser = this.mockUsers[Math.floor(Math.random() * this.mockUsers.length)];
-            
-            // Log access attempt
-            this.accessLogs.push({
-                userId: matchedUser.id,
-                timestamp: new Date().toISOString(),
-                success: true,
-                confidence: 0.75 + Math.random() * 0.25
-            });
-            
-            return {
-                is_match: true,
-                user: matchedUser,
-                confidence: 0.75 + Math.random() * 0.25
-            };
-        }
-        
-        return {
-            is_match: false,
-            reason: 'unknown_face',
-            message: 'Face not recognized'
-        };
+        // Backend จะคืนค่าเป็น { is_match: true, user: { name: 'น้องบอล' }, confidence: 0.9 }
+        // หรือ { is_match: false, reason: 'unknown_face' }
+        console.log("Backend response:", result);
+        return result; 
     }
 
-    async simulateLineNotification(message, userId = null) {
-        // Simulate LINE notification sending
-        await this.delay(500);
-        
-        console.log('LINE Notification:', message);
-        
-        return {
-            success: true,
-            message_id: `msg_${Date.now()}`,
-            timestamp: new Date().toISOString()
-        };
-    }
+    // ---------------------------------------------------
+    // END: ส่วนที่เปลี่ยนแปลง
+    // ---------------------------------------------------
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     generateJWT(userId) {
-        // Simulate JWT token generation
+        // ในระบบจริง JWT ควรสร้างจาก Backend
+        // แต่ใน Prototype นี้ เรายังจำลองที่ Frontend ได้
         return btoa(JSON.stringify({
             userId: userId,
             exp: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
@@ -179,8 +127,8 @@ class FaceRegistrationSystem {
         }));
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     verifyJWT(token) {
-        // Simulate JWT verification
         try {
             const payload = JSON.parse(atob(token));
             return payload.exp > Date.now();
@@ -189,24 +137,12 @@ class FaceRegistrationSystem {
         }
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // Animation helpers
-    animateProgress(element, targetValue, duration = 1000) {
-        if (typeof anime !== 'undefined') {
-            anime({
-                targets: element,
-                value: targetValue,
-                duration: duration,
-                easing: 'easeInOutQuad'
-            });
-        } else {
-            element.value = targetValue;
-        }
-    }
-
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     animateElement(element, properties, duration = 500) {
         if (typeof anime !== 'undefined') {
             anime({
@@ -218,6 +154,7 @@ class FaceRegistrationSystem {
         }
     }
 
+    // ฟังก์ชันนี้ยังเหมือนเดิม
     showNotification(message, type = 'info') {
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
@@ -270,15 +207,11 @@ class FaceRegistrationSystem {
 // Initialize the system
 const faceSystem = new FaceRegistrationSystem();
 
-// *** START FIX: Camera Release ***
-// Add event listener to stop the camera stream when leaving the page.
-// This prevents the "black screen" issue when navigating to a new page
-// that also needs to use the camera.
+// *** โค้ดแก้จอดำ (ยังมีอยู่) ***
 window.addEventListener('beforeunload', () => {
     console.log("Releasing camera before page unload...");
     faceSystem.stopVideoStream();
 });
-// *** END FIX ***
 
 // Export for use in other files
 if (typeof module !== 'undefined' && module.exports) {
