@@ -100,3 +100,5 @@
 - Spoof detection with visual feedback
 - Face matching with confidence scoring
 - Audit logging for security events
+
+
